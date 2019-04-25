@@ -217,7 +217,7 @@ public class Ipv6RoutingComponent {
                 .withId(PiActionId.of("NoAction"))
                 .build();
 
-        FlowRule myStationRule = Utils.forgeFlowRule(
+        FlowRule myStationRule = Utils.buildFlowRule(
                 deviceId, appId,
                 "FabricIngress.l2_my_station",
                 match, action);
@@ -278,7 +278,7 @@ public class Ipv6RoutingComponent {
                 .withParameter(param)
                 .build();
 
-        final FlowRule rule = Utils.forgeFlowRule(
+        final FlowRule rule = Utils.buildFlowRule(
                 deviceId, appId,
                 "FabricIngress.l2_exact_table",
                 match, action);
@@ -473,7 +473,7 @@ public class Ipv6RoutingComponent {
                         .build())
                 .collect(Collectors.toList());
 
-        return Utils.forgeSelectGroup(
+        return Utils.buildSelectGroup(
                 deviceId, tableId, actionProfileId, groupId, actions, appId);
     }
 
@@ -503,7 +503,7 @@ public class Ipv6RoutingComponent {
         // Action: set action profile group ID
         PiTableAction action = PiActionProfileGroupId.of(groupId);
 
-        return Utils.forgeFlowRule(deviceId, appId, tableId, match, action);
+        return Utils.buildFlowRule(deviceId, appId, tableId, match, action);
     }
 
     /**

@@ -181,7 +181,7 @@ public class Srv6Component {
                 .withParameters(actionParams)
                 .build();
 
-        final FlowRule rule = Utils.forgeFlowRule(
+        final FlowRule rule = Utils.buildFlowRule(
                 deviceId, appId,
                 "FabricIngress.srv6_transit",
                 match, action);
