@@ -228,16 +228,16 @@ public class Ipv6RoutingComponent {
         // HINT: this method create a flow rule for *l2_my_station* table
         //       which matches the *ethernet destination*
         //       and there is only one action called *NoAction*
-        String tableId = "";
-        String matchFieldId = "";
-        String actionId = "";
+        String tableId = "FabricIngress.l2_my_station";
+        String matchFieldId = "hdr.ethernet.dst_addr";
+        String actionId = "NoAction";
 
 
         // TODO: create a match which matches my station mac address.
         // HINT: uses *.matchExact* to match exact byte value of dst mac.
         PiMatchFieldId piMatchFieldId = PiMatchFieldId.of(matchFieldId);
         PiCriterion piMatch = PiCriterion.builder()
-                // TODO: add code here
+                .matchExact(piMatchFieldId, myStationMac.toBytes())
                 .build();
 
         // Creates an action which do *NoAction* when hit.
@@ -267,14 +267,15 @@ public class Ipv6RoutingComponent {
         // HINT: this method create a flow for *l2_exact_table* table
         //       which matches the *ethernet destination* and sets the output
         //       port by invoking *set_output_port* action.
-        String tableId = "";
-        String matchFieldId = "";
-        String actionId = "";
-        String actionParam = "";
+        String tableId = "FabricIngress.l2_exact_table";
+        String matchFieldId = "hdr.ethernet.dst_addr";
+        String actionId = "FabricIngress.set_output_port";
+        String actionParam = "port_num";
 
         // TODO: create a match which matches destination mac to next hop
         PiCriterion match = PiCriterion.builder()
-                // TODO: add code here
+                .matchExact(PiMatchFieldId.of(matchFieldId),
+                        nexthopMac.toBytes())
                 .build();
 
         PiActionParam param = new PiActionParam(PiActionParamId.of(actionParam),
@@ -283,7 +284,8 @@ public class Ipv6RoutingComponent {
         // HINT: use *withId* method to set action id and use *withParameter*
         //       to set action parameter
         PiAction action = PiAction.builder()
-                // TODO: add code here
+                .withId(PiActionId.of(actionId))
+                .withParameter(param)
                 .build();
 
         return Utils.buildFlowRule(
@@ -307,10 +309,10 @@ public class Ipv6RoutingComponent {
         // TODO: Fill Ids.
         // HINT: this method creates an group for *l3_table* and uses
         //       *ecmp_selector* action profile group to do ECMP.
-        String tableId = "";
-        String actionProfileId = "";
-        String setNextHopAction = "";
-        String dmacParam = "";
+        String tableId = "FabricIngress.l3_table";
+        String actionProfileId = "FabricIngress.ecmp_selector";
+        String setNextHopAction = "FabricIngress.set_l2_next_hop";
+        String dmacParam = "dmac";
 
 
         final List<PiAction> actions = Lists.newArrayList();
@@ -318,7 +320,10 @@ public class Ipv6RoutingComponent {
             // TODO: Create a list of actions for each next hop.
             // HINT: add action id and action parameter
             PiAction action = PiAction.builder()
-                    // TODO: add code here
+                    .withId(PiActionId.of(setNextHopAction))
+                    .withParameter(new PiActionParam(
+                            PiActionParamId.of(dmacParam),
+                            nextHopMac.toBytes()))
                     .build();
             actions.add(action);
         }
@@ -342,13 +347,15 @@ public class Ipv6RoutingComponent {
         // TODO: Fill Ids.
         // HINT: the routing rule matches *destination IP* and forward the
         //       packet to the next hop group
-        String matchFieldId = "";
-        String tableId = "";
+        String matchFieldId = "hdr.ipv6.dst_addr";
+        String tableId = "FabricIngress.l3_table";
 
         // TODO: Cerate a match for IPv6 address with LPM.
         // HINT: use *matchLpm* to match LPM
         PiCriterion match = PiCriterion.builder()
-                // TODO: add code here
+                .matchLpm(PiMatchFieldId.of(matchFieldId),
+                        ip6Prefix.address().toOctets(),
+                        ip6Prefix.prefixLength())
                 .build();
 
         // Action: set action profile group ID
@@ -448,12 +455,7 @@ public class Ipv6RoutingComponent {
             }
             DeviceId leafId = device.id();
             MacAddress leafMac = getMyStationMac(leafId);
-            final Set<Ip6Prefix> subnetsToRoute = getInterfaceIpv6Prefixes(leafId);
-
-            // FIXME: This should be added in exercise 3
-            Ip6Address leafSid = getDeviceSid(leafId);
-            subnetsToRoute.add(Ip6Prefix.valueOf(leafSid, 128));
-            // ---- end exercise 3 addition
+            Set<Ip6Prefix> subnetsToRoute = getInterfaceIpv6Prefixes(leafId);
 
             if (subnetsToRoute.isEmpty()) {
                 // No subnets on this leaf switch. Next device.
@@ -509,22 +511,6 @@ public class Ipv6RoutingComponent {
                 .map(subnet -> createRoutingRule(leafId, subnet, groupId))
                 .collect(Collectors.toList());
 
-        // FIXME exercise 3 add spine sid rules
-        stream(deviceService.getDevices())
-                .map(Device::id)
-                .filter(this::isSpine)
-                .forEach(spineId -> {
-                    MacAddress spineMac = getMyStationMac(spineId);
-                    Ip6Address spineSid = getDeviceSid(spineId);
-                    int spineGroupId = macToGroupId(spineMac);
-                    GroupDescription group = createNextHopGroup(
-                            spineGroupId, Collections.singleton(spineMac), leafId);
-                    insertInOrder(group, Collections.singleton(
-                            createRoutingRule(leafId, Ip6Prefix.valueOf(spineSid, 128),
-                                    spineGroupId)));
-
-                });
-        // --- end exercise 3
         insertInOrder(ecmpGroup, flowRules);
     }
 
@@ -717,18 +703,5 @@ public class Ipv6RoutingComponent {
             log.error("Interrupted!", e);
             Thread.currentThread().interrupt();
         }
-    }
-
-    /**
-     * Gets Srv6 SID for the given device.
-     *
-     * @param deviceId the device ID
-     * @return SID for the device
-     */
-    private Ip6Address getDeviceSid(DeviceId deviceId) {
-        return getDeviceConfig(deviceId)
-                .map(Srv6DeviceConfig::mySid)
-                .orElseThrow(() -> new RuntimeException(
-                        "Missing mySid config for " + deviceId));
     }
 }
