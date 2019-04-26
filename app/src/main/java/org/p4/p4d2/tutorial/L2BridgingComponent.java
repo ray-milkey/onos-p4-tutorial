@@ -138,12 +138,6 @@ public class L2BridgingComponent {
         log.info("Stopped");
     }
 
-    //--------------------------------------------------------------------------
-    // METHODS TO COMPLETE.
-    //
-    // Complete the implementation wherever you see TODO.
-    //--------------------------------------------------------------------------
-
     /**
      * Sets up everything necessary to support L2 bridging on the given device.
      *
@@ -155,12 +149,18 @@ public class L2BridgingComponent {
         insertCpuCloneGroup(deviceId);
 
         if (isSpine(deviceId)) {
-            // Stope here. We support bridging only on leaf/tor switches.
+            // Stop here. We support bridging only on leaf/tor switches.
             return;
         }
         insertMulticastGroup(deviceId);
         insertMulticastFlowRules(deviceId);
     }
+
+    //--------------------------------------------------------------------------
+    // METHODS TO COMPLETE.
+    //
+    // Complete the implementation wherever you see TODO.
+    //--------------------------------------------------------------------------
 
     /**
      * Inserts a CLONE group in the ONOS core to clone packets to the CPU (i.e.
@@ -175,12 +175,17 @@ public class L2BridgingComponent {
         // Ports where to clone the packet. Just controller in this case.
         Set<PortNumber> clonePorts = Collections.singleton(PortNumber.CONTROLLER);
 
-        // Forge ONOS group object. Use the same CPU clone session ID as in the
-        // P4 program.
+        // TODO: Create the clone group to send packets to the controller
+        // HINT: at the top of the file, we define a group ID to be used
+        //       for this purpose: *CPU_CLONE_SESSION_ID*
+        // HINT: The Utils class contains a helper method for building the
+        //       group, called *buildMulticastGroup*
+        // ---- START SOLUTION ----
         final GroupDescription cloneGroup = Utils.buildCloneGroup(
                 appId, deviceId, CPU_CLONE_SESSION_ID, clonePorts);
+        // ---- END SOLUTION ----
 
-        // Insert.
+        // Install the group to the device
         groupService.addGroup(cloneGroup);
     }
 
@@ -205,60 +210,72 @@ public class L2BridgingComponent {
         log.info("Creating multicast group with {} ports on {}",
                  ports.size(), deviceId);
 
-        // Forge group object.
+        // TODO: Create the multicast group to send packets to the host-facing ports
+        // HINT: at the top of the file, we define a group ID to be used
+        //       for this purpose: *DEFAULT_BROADCAST_GROUP_ID*
+        // HINT: The Utils class contains a helper method for building the
+        //       group, called *buildMulticastGroup*
+        // ---- START SOLUTION ----
         final GroupDescription multicastGroup = Utils.buildMulticastGroup(
                 appId, deviceId, DEFAULT_BROADCAST_GROUP_ID, ports);
+        // ---- END SOLUTION ----
 
-        // Insert.
+        // TODO: Install the group to the device using the *groupService*
+        // ---- START SOLUTION ----
         groupService.addGroup(multicastGroup);
+        // ---- END SOLUTION ----
     }
 
     /**
      * Insert flow rules matching matching ethernet destination
-     * broadcast/multicast addresses (e.g. ARP requests, NDP Neighbor
-     * Solicitation, etc.). Such packets should be processed by the multicast
-     * group created before.
+     * broadcast/multicast addresses (e.g. NDP Neighbor Solicitation).
+     * Such packets should be processed by the multicast group created above.
      *
      * @param deviceId device ID where to install the rules
      */
     private void insertMulticastFlowRules(DeviceId deviceId) {
         log.info("Inserting L2 multicast flow rules on {}...", deviceId);
 
-        // Action: set multicast group id
-        final PiAction setMcastGroupAction = PiAction.builder()
-                .withId(PiActionId.of("FabricIngress.set_multicast_group"))
-                .withParameter(new PiActionParam(
-                        PiActionParamId.of("gid"),
-                        DEFAULT_BROADCAST_GROUP_ID))
-                .build();
+        // TODO: Fill in table name.
+        // HINT: this should match the table name from your P4 program
+        // ---- START SOLUTION ----
+        String tableId = "FabricIngress.l2_ternary_table";
+        // ---- END SOLUTION ----
 
-        // Match ARP request - Match exactly FF:FF:FF:FF:FF
-        final PiCriterion macBroadcastCriterion = PiCriterion.builder()
-                .matchTernary(
-                        PiMatchFieldId.of("hdr.ethernet.dst_addr"),
-                        MacAddress.valueOf("FF:FF:FF:FF:FF:FF").toBytes(),
-                        MacAddress.valueOf("FF:FF:FF:FF:FF:FF").toBytes())
-                .build();
-
-        // Match NDP NS - Match ternary 33:33:**:**:**:**
+        // TODO: Create a criterion that matches NDP neighbor solicitation (NS) packets
+        // HINT: the destination MAC address is a ternary value: 33:33:**:**:**:**
         final PiCriterion ipv6MulticastCriterion = PiCriterion.builder()
                 .matchTernary(
-                        PiMatchFieldId.of("hdr.ethernet.dst_addr"),
+                        // ---- START SOLUTION ----
+                        PiMatchFieldId.of("hdr.ethernet.dst_addr"), // omit the match key name
                         MacAddress.valueOf("33:33:00:00:00:00").toBytes(),
-                        MacAddress.valueOf("FF:FF:00:00:00:00").toBytes())
+                        MacAddress.valueOf("FF:FF:00:00:00:00").toBytes()
+                        // ---- END SOLUTION ----
+                )
                 .build();
 
-        //  Forge 2 flow rules for  the given table.
-        final String tableId = "FabricIngress.l2_ternary_table";
-        final FlowRule rule1 = Utils.buildFlowRule(
-                deviceId, appId, tableId,
-                macBroadcastCriterion, setMcastGroupAction);
-        final FlowRule rule2 = Utils.buildFlowRule(
+        // TODO: Create an action that sets the multicast group id
+        // HINT: use the same multicast group that you inserted above
+        final PiAction setMcastGroupAction = PiAction.builder()
+                // ---- START SOLUTION ----
+                //.withId(PiActionId.of(""))
+                .withId(PiActionId.of("FabricIngress.set_multicast_group"))
+                // ---- END SOLUTION ----
+                .withParameter(new PiActionParam(
+                        // ---- START SOLUTION ----
+                        //PiActionParamId.of(""), 0L))
+                        PiActionParamId.of("gid"), DEFAULT_BROADCAST_GROUP_ID))
+                        // ---- END SOLUTION ----
+                .build();
+
+
+        //  Build the flow rule for the given table.
+        final FlowRule rule = Utils.buildFlowRule(
                 deviceId, appId, tableId,
                 ipv6MulticastCriterion, setMcastGroupAction);
 
-        // Insert.
-        flowRuleService.applyFlowRules(rule1, rule2);
+        // Install flow rule onto the device.
+        flowRuleService.applyFlowRules(rule);
     }
 
     /**
@@ -275,17 +292,27 @@ public class L2BridgingComponent {
 
         // Match exactly on the host MAC address.
         final MacAddress hostMac = host.mac();
+
+        // TODO create a criterion that matches on the destination MAC of the host
+        // HINT: use the *toBytes* method to convert a MacAddress to a byte array
         final PiCriterion hostMacCriterion = PiCriterion.builder()
+                // ---- START SOLUTION ----
+                //.matchExact(PiMatchFieldId.of(""), new byte[]{})
                 .matchExact(PiMatchFieldId.of("hdr.ethernet.dst_addr"),
                             hostMac.toBytes())
+                // ---- END SOLUTION ----
                 .build();
 
-        // Action: set output port
+        // TODO create an action to sets to the correct output port
         final PiAction l2UnicastAction = PiAction.builder()
+                // ---- START SOLUTION ----
+                //.withId(PiActionId.of(""))
                 .withId(PiActionId.of("FabricIngress.set_output_port"))
                 .withParameter(new PiActionParam(
-                        PiActionParamId.of("port_num"),
-                        port.toLong()))
+                        //PiActionParamId.of(""), 0L
+                        PiActionParamId.of("port_num"), port.toLong()
+                        ))
+                // ---- END SOLUTION ----
                 .build();
 
         // Forge flow rule.
@@ -426,18 +453,6 @@ public class L2BridgingComponent {
     }
 
     /**
-     * Cleans up L2 bridging runtime configuration from all devices known by
-     * ONOS and for which this ONOS node instance is currently master.
-     */
-    private void cleanUpAllDevices() {
-        deviceService.getDevices().forEach(device -> {
-            if (mastershipService.isLocalMaster(device.id())) {
-                cleanUpDevice(device.id());
-            }
-        });
-    }
-
-    /**
      * Cleans up the L2 bridging runtime configuration from the given device.
      *
      * @param deviceId the device to clean up
@@ -448,5 +463,17 @@ public class L2BridgingComponent {
         flowRuleService.removeFlowRulesById(appId);
         groupService.getGroups(deviceId, appId).forEach(
                 group -> groupService.removeGroup(deviceId, group.appCookie(), appId));
+    }
+
+    /**
+     * Cleans up L2 bridging runtime configuration from all devices known by
+     * ONOS and for which this ONOS node instance is currently master.
+     */
+    private void cleanUpAllDevices() {
+        deviceService.getDevices().forEach(device -> {
+            if (mastershipService.isLocalMaster(device.id())) {
+                cleanUpDevice(device.id());
+            }
+        });
     }
 }

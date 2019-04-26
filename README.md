@@ -43,7 +43,7 @@ Use the following credentials to log in the Ubuntu system:
 
 ### Get this tutorial repo
 
-To work on the exercises you will need to clone this repo inside the VM:
+To work on the exercises, you will need to clone this repo inside the VM:
 
     cd ~
     git clone https://github.com/opennetworkinglab/onos-p4-tutorial tutorial
